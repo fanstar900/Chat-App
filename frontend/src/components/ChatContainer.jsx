@@ -1,7 +1,7 @@
 import React, { useRef , useEffect, useContext, useState } from "react";
 import toast from "react-hot-toast";
 
-import assets, { messagesDummyData } from "../assets/assets";
+import assets from "../assets/assets";
 import { formatMessageTime } from "../lib/utils";
 import { ChatContext } from "../../context/ChatContext";
 import { AuthContext } from "../../context/AuthContext";
@@ -28,6 +28,8 @@ const ChatContainer = () => {
     const file = e.target.files[0];
     if(!file || !file.type.startsWith("image/")){// checking file type using startsWith
       toast.error("Select an image file")
+      e.target.value = '';
+      return;
     } 
     const reader = new FileReader();
 
@@ -75,7 +77,7 @@ const ChatContainer = () => {
               {msg.image ? (
                 <img src={msg.image} alt="" className='max-w-[230px] border  border-gray-700 rounded-lg overflow-hidden mb-8'/>
               ):(
-                <p className={`p-2 max-w-[200px] mid:text-sm font-light rounded-lg mb-8 break-all bg-violet-500/30 text-white ${msg.senderId === authUser._id ? 'rounded-br-none' : 
+                <p className={`p-2 max-w-[200px] md:text-sm font-light rounded-lg mb-8 break-all bg-violet-500/30 text-white ${msg.senderId === authUser._id ? 'rounded-br-none' : 
                 'rounded-bl-none'
                 }`}>{msg.text}</p>
 
