@@ -8,13 +8,12 @@ const ProfilePage = () => {
   const [selectedImg, setSelectedImg] = useState(null);
   const navigate = useNavigate();
   const [name, setName] = useState(authUser.fullName);
-  const [bio, setBio] = useState(authUser.bio);
+  const [bio, setBio] = useState(authUser.bio || "");
 
   const handleSubmit = async (event) => {
     event.preventDefault();
     if (!selectedImg) {
-      await updateProfile({ fullName: name, bio });
-      navigate("/");
+      if (await updateProfile({ fullName: name, bio })) navigate("/");
       return;
     }
     // to send image we need to convert into base64img
@@ -22,8 +21,7 @@ const ProfilePage = () => {
     reader.readAsDataURL(selectedImg);
     reader.onload = async () => {
       const base64Image = reader.result;
-      await updateProfile({ profilePic: base64Image, fullName: name, bio });
-      navigate("/");
+      if (await updateProfile({ profilePic: base64Image, fullName: name, bio })) navigate("/");
     };
   };
   return (
@@ -39,7 +37,7 @@ const ProfilePage = () => {
               onChange={(e) => setSelectedImg(e.target.files[0])}
               type="file"
               id="avatar"
-              accept=".png .jpg, .jpeg"
+              accept=".png, .jpg, .jpeg"
               hidden
             />
             <img

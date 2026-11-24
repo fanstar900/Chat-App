@@ -5,16 +5,19 @@ import jwt from "jsonwebtoken";
 export const protectRoute = async(req , res , next)=>{
   try{
     const token = req.headers.token;
+    if(!token){
+      return res.status(401).json({success : false , message : "Not authorized"});
+    }
     const decoded = jwt.verify(token , process.env.JWT_SECRET)
     const user = await User.findById(decoded.userId).select("-password"); // removes password from User details
     if(!user){
-      return res.json({success : false , message : "User not found"});
+      return res.status(401).json({success : false , message : "User not found"});
     }
     req.user = user;
     next(); // goes to checkAuth in userController.js which return a success with the the user details excluding the password
 
   }catch(error){
     console.log(error.message);
-    res.json({success : false , message : error.message});
+    res.status(401).json({success : false , message : "Not authorized"});
   }
 }

@@ -1,7 +1,10 @@
+import mongoose from "mongoose";
 import Message from "../models/Message.js";
 import User from "../models/User.js";
 import cloudinary from "../lib/cloudinary.js";
 import {io , userSocketMap} from "../server.js"
+
+const isValidId = (id) => mongoose.Types.ObjectId.isValid(id);
 
 
 // Get all users except the logged in user
@@ -15,20 +18,20 @@ export const getUsersForSidebar = async (req, res) => {
     // count number of messages not seen
     const unseenMessages = {};
     const promises = filteredUsers.map(async (user) => {
-      const messages = await Message.find({
+      const count = await Message.countDocuments({
         senderId: user._id,
         receiverId: userId,
         seen: false,
-      }); // filters all message and find the message for which sender was user._id and receiver was userId and seen status is false
-      if (messages.length > 0) {
-        unseenMessages[user._id] = messages.length;
+      }); // counts messages where sender was user._id, receiver was userId and seen status is false
+      if (count > 0) {
+        unseenMessages[user._id] = count;
       }
     });
     await Promise.all(promises);
     res.json({ success: true, users: filteredUsers, unseenMessages });
   } catch (error) {
     console.log(error.message);
-    res.json({ success: false, message: error.message });
+    res.status(500).json({ success: false, message: "Could not load users" });
   }
 };
 
@@ -39,6 +42,10 @@ export const getMessages = async(req , res)=>{
   try{
     const { id : selectedUserId} = req.params; // need to send the selectedUserId in req
     const myId = req.user._id; // It's me through middleware
+
+    if(!isValidId(selectedUserId)){
+      return res.status(400).json({ success: false, message: "Invalid user id" });
+    }
 
     const messages = await Message.find({
       $or:[
@@ -52,7 +59,7 @@ export const getMessages = async(req , res)=>{
 
   }catch(error){
     console.log(error.message);
-    res.json({ success: false, message: error.message });    
+    res.status(500).json({ success: false, message: "Could not load messages" });
   }
 }
 
@@ -61,11 +68,21 @@ export const getMessages = async(req , res)=>{
 export const markMessageAsSeen = async(req , res)=>{
   try{
     const {id} = req.params;
-    await Message.findByIdAndUpdate(id , {seen : true})
+    if(!isValidId(id)){
+      return res.status(400).json({ success: false, message: "Invalid message id" });
+    }
+    // only the receiver of a message can mark it as seen
+    const message = await Message.findOneAndUpdate(
+      { _id: id, receiverId: req.user._id },
+      { seen: true }
+    );
+    if(!message){
+      return res.status(404).json({ success: false, message: "Message not found" });
+    }
     res.json({success: true})
   }catch(error){
     console.log(error.message);
-    res.json({success: false , message: error.message})
+    res.status(500).json({success: false , message: "Could not update message"})
   }
 }
 
@@ -78,6 +95,17 @@ export const sendMessage = async(req,res)=>{
     const receiverId = req.params.id;
     const senderId = req.user._id;
 
+    if(!isValidId(receiverId) || !(await User.exists({ _id: receiverId }))){
+      return res.status(404).json({success: false , message: "Receiver not found"});
+    }
+    const trimmedText = typeof text === "string" ? text.trim() : "";
+    if(!trimmedText && !image){
+      return res.status(400).json({success: false , message: "Message cannot be empty"});
+    }
+    if(image && (typeof image !== "string" || !image.startsWith("data:image/"))){
+      return res.status(400).json({success: false , message: "Invalid image"});
+    }
+
     let imageUrl ;
     if(image){
       const uploadResponse = await cloudinary.uploader.upload(image)
@@ -87,7 +115,7 @@ export const sendMessage = async(req,res)=>{
     const newMessage = await Message.create({
       senderId,
       receiverId,
-      text,
+      text: trimmedText || undefined,
       image: imageUrl
     })
 
@@ -98,13 +126,10 @@ export const sendMessage = async(req,res)=>{
       io.to(receiverSocketId).emit("newMessage", newMessage);
     }
 
-
-
-    res.json({success: true, newMessage}); // ?? but we want this message to be instantly into the receiver chat
-
+    res.status(201).json({success: true, newMessage});
 
   }catch(error){
     console.log(error.message);
-    res.json({success: false , message: error.message}) 
+    res.status(500).json({success: false , message: "Could not send message"})
   }
 }
